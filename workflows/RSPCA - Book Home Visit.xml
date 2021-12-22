@@ -1,0 +1,596 @@
+<?xml version="1.0"?>
+
+<workflow-definition xmlns="urn:liferay.com:liferay-workflow_7.4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd">
+	<name>RSCPA - Book Home Visit</name>
+	<description>The workflow is part of a collection of workflows, which together demonstrate a re-homing use case</description>
+	<version>1</version>
+	<condition>
+		<name>Update Calendar Booking</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						746,
+						119
+					]
+				}
+			]]>
+		</metadata>
+		<script>
+			<![CDATA[import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.calendar.model.CalendarBooking;
+import com.liferay.calendar.service.CalendarBookingLocalService;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.scripting.groovy.internal.GroovyExecutor;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+
+import java.util.List;
+import java.lang.StringBuilder;
+
+import org.osgi.framework.Bundle;
+import org.osgi.framework.BundleContext;
+import org.osgi.framework.FrameworkUtil;
+import org.osgi.util.tracker.ServiceTracker;	
+
+final Log logger = LogFactoryUtil.getLog("RSPCA: Book Home Visit - Update Calendar Booking");
+
+final long companyId = 20099;
+final long parentCalendarId = -1;
+final long startTime = 1641772800000;
+final long endTime = 1642204800000;
+final int[] statuses = [2];
+final int start = 0;
+final int end = 10;
+
+final long bookHomeVisitRecVerId = GetterUtil.getLong((String)workflowContext.get(WorkflowConstants.CONTEXT_ENTRY_CLASS_PK));
+final long rehomingApplicationRecVerId = GetterUtil.getLong((String)workflowContext.get("rehomingRecVerId"));
+
+final String emailAddress = workflowContext.get("emailAddress");
+final String surname = workflowContext.get("surname");
+final String petName = workflowContext.get("petName");
+final String applicationId = workflowContext.get("applicationId");
+
+final String appointment = workflowContext.get("appointment");
+final String title = workflowContext.get("title");
+final String applicationType = workflowContext.get("rehomingType");
+
+logger.info("workflowContext.get(\"appointment\") : " + workflowContext.get("appointment"));
+logger.info("workflowContext.get(\"rehomingType\") : " + workflowContext.get("rehomingType"));
+logger.info("workflowContext.get(\"title\") : " + title);
+
+logger.info("appointment : " + appointment);
+logger.info("title : " + title);
+logger.info("applicationType : " + applicationType);
+
+final Bundle bundle = FrameworkUtil.getBundle(GroovyExecutor.class);
+final BundleContext bundleContext = bundle.getBundleContext();
+final ServiceTracker<CalendarBookingLocalService, CalendarBookingLocalService> serviceTracker =
+            new ServiceTracker(bundleContext, CalendarBookingLocalService.class, null);
+            serviceTracker.open();
+final CalendarBookingLocalService calendarBookingLocalService = serviceTracker.waitForService(500);
+final List<CalendarBooking> calendarBookings = calendarBookingLocalService.search(companyId, null, null, null, parentCalendarId, "\"" + appointment + "\"", null, null, startTime, endTime, false, statuses, true, start, end, null);
+
+logger.info("calendarBookings.size() : " + calendarBookings.size());
+
+if (calendarBookings.size() == 1) {
+    final CalendarBooking calendarBooking = calendarBookings.get(0);
+    final long calendarBookingId = calendarBooking.getCalendarBookingId();
+    logger.info("Reserving " + appointment + " (" + calendarBookingId + ")");
+    calendarBooking = calendarBookingLocalService.updateStatus(userId, calendarBookingId, WorkflowConstants.STATUS_APPROVED, serviceContext);
+
+    final StringBuilder str = new StringBuilder();
+    str.append("Application Id: ");
+    str.append(applicationId);
+    str.append(" [");
+    str.append(rehomingApplicationRecVerId);
+    str.append(", ");
+    str.append(bookHomeVisitRecVerId);
+    str.append("]");
+    str.append(System.lineSeparator());
+    str.append("Main contact: ");
+    str.append(title);
+    str.append(" ");
+    str.append(surname);
+    str.append(System.lineSeparator());
+    str.append("Email address: ");
+    str.append(emailAddress);
+    str.append(System.lineSeparator());
+    str.append("Re-homing type: ");
+    str.append(applicationType);
+    str.append(System.lineSeparator());
+    str.append("Pet name: ");
+    str.append(petName);
+    str.append(System.lineSeparator());
+
+    final String description = str.toString();
+
+	logger.info("Adding visit context : " + description);
+
+    calendarBooking.setDescription(description);
+
+    calendarBookingLocalService.updateCalendarBooking(userId, calendarBookingId, calendarBooking.getCalendarId(),
+        calendarBooking.getTitleMap(), calendarBooking.getDescriptionMap(), calendarBooking.getLocation(),
+        calendarBooking.getStartTime(), calendarBooking.getEndTime(), calendarBooking.getAllDay(), calendarBooking.getRecurrence(),
+        calendarBooking.getFirstReminder(), calendarBooking.getFirstReminderType(), calendarBooking.getSecondReminder(),
+        calendarBooking.getSecondReminderType(), serviceContext);
+
+    returnValue = "Approved";
+    return;
+}
+returnValue = "Error";]]>
+		</script>
+		<script-language>groovy</script-language>
+		<transitions>
+			<transition>
+				<name>Approved</name>
+				<target>Approve Home Visit</target>
+				<default>true</default>
+			</transition>
+			<transition>
+				<name>Error</name>
+				<target>Rejected</target>
+				<default>false</default>
+			</transition>
+		</transitions>
+	</condition>
+	<state>
+		<name>Start Node</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						100,
+						40
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Populate WorkflowContext with Home Visit Booking Request</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.dynamic.data.mapping.storage.DDMFormFieldValue;
+import com.liferay.dynamic.data.mapping.model.Value;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+
+def normaliseValue(String value) {
+    if (value == null || "".equals(value)) {
+        return value;
+    }
+    return value.replaceAll("\\[\"","").replaceAll("\"\\]","");
+}
+
+final Log logger = LogFactoryUtil.getLog("RSPCA: Book Home Visit - Populate WorkflowContext with Home Visit Booking Reqeust");
+
+// Fetch the form record Id from the workflow context
+final long recVerId = GetterUtil.getLong((String)workflowContext.get(WorkflowConstants.CONTEXT_ENTRY_CLASS_PK));
+
+// Initialize form record version
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(recVerId);
+
+// Retrieve the form field values
+final List<DDMFormFieldValue> formFieldVals = recVer.getDDMFormValues().getDDMFormFieldValues();
+
+final List<String> requiredFieldReferences = Arrays.asList("applicationId", "rehomingRecVerId", "calendarId", "status", "appointment");
+
+for (DDMFormFieldValue fmval : formFieldVals) {
+    final String fieldReference = fmval.getFieldReference();
+    if (requiredFieldReferences.contains(fieldReference)) {
+        final Value val = fmval.getValue();
+        final String data = normaliseValue(val.getString(Locale.ROOT));
+        logger.info("Adding " + fieldReference + " : " + data + " to the WorkflowContext");
+        workflowContext.put(fieldReference, data);
+    }
+}
+
+final String appointment = normaliseValue(workflowContext.get("appointment"));
+if (appointment != null && appointment.length() > 10) {
+    workflowContext.put("dateOfVisit", appointment.substring(0, 10));
+    workflowContext.put("timeOfVisit", appointment.substring(11));
+}
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+			<action>
+				<name>Populate WorkflowContext with Re-homing Application</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.dynamic.data.mapping.storage.DDMFormFieldValue;
+import com.liferay.dynamic.data.mapping.model.Value;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+
+def normaliseValue(String value) {
+    if (value == null || "".equals(value)) {
+        return value;
+    }
+    return value.replaceAll("\\[\"","").replaceAll("\"\\]","");
+}
+
+final Log logger = LogFactoryUtil.getLog("RSPCA: Book Home Visit - Populate WorkflowContext with Re-homing Application");
+
+final long rehomingRecVerId = GetterUtil.getLong((String)workflowContext.get("rehomingRecVerId"));
+
+// Initialize form record version
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(rehomingRecVerId);
+
+// Retrieve the form field values
+final List<DDMFormFieldValue> formFieldVals = recVer.getDDMFormValues().getDDMFormFieldValues();
+
+final List<String> requiredFieldReferences = Arrays.asList("applicationId", "firstName", "title", "surname", "emailAddress", "rehomingType", "petName");
+
+for (DDMFormFieldValue fmval : formFieldVals) {
+    final String fieldReference = fmval.getFieldReference();
+    if (requiredFieldReferences.contains(fieldReference)) {
+        final Value val = fmval.getValue();
+        final String data = normaliseValue(val.getString(Locale.ROOT));
+        logger.info("Adding " + fieldReference + " : " + data + " to the WorkflowContext");
+        workflowContext.put(fieldReference, data);
+    }
+}
+
+final String title = workflowContext.get("title");
+final String surname = workflowContext.get("surname");
+
+if (title != null && surname != null) {
+    workflowContext.put("mainContact", title + " " + surname);
+}
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onExit</execution-type>
+			</action>
+		</actions>
+		<initial>true</initial>
+		<transitions>
+			<transition>
+				<name>Request Appointment</name>
+				<target>Review Appointment</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<name>Approve Home Visit</name>
+		<metadata>
+			<![CDATA[
+				{
+					"terminal": true,
+					"xy": [
+						713,
+						436
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Approve</name>
+				<description>Approve</description>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.petra.mail.MailEngine;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+
+final Log logger = LogFactoryUtil.getLog("RSPCA: Re-homing Application - Approve");
+
+final String from = "test@liferay.com";
+final String subject ="We will see you soon"
+
+final String to = workflowContext.get("emailAddress");
+final String mainContact = workflowContext.get("mainContact");
+final String dateOfVisit = workflowContext.get("dateOfVisit");
+final String timeOfVisit = workflowContext.get("timeOfVisit");
+
+String body =
+    "Dear " + mainContact + "\n" +
+    "Thank you for booking your home visit.\n\n" +
+    "One of our re-homing team will see you on " + dateOfVisit + " at " + timeOfVisit + ".\n\n" +
+    "Many thanks,\n\n" +
+    "The Re-homing Team\n\n";
+
+try {
+  MailEngine.send(from, to, subject, body)
+} catch(Exception e) {
+  logger.error(e);
+}
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("approved"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+			<notification>
+				<name>Send Link for Home Visit Report</name>
+				<description>
+					<![CDATA[]]>
+				</description>
+				<template>
+					<![CDATA[https://sevendotforever.liferayuk.net/group/rspca-staff/home-visit-report?dateOfVisit=${dateOfVisit}&mainContact=${mainContact}&appId=${applicationId}&rehomingRecVerId=${rehomingRecVerId}]]>
+				</template>
+				<template-language>freemarker</template-language>
+				<notification-type>user-notification</notification-type>
+				<recipients receptionType="to">
+					<roles>
+						<role>
+							<role-type>regular</role-type>
+							<name>Rehoming Manager</name>
+							<auto-create>true</auto-create>
+						</role>
+					</roles>
+				</recipients>
+				<execution-type>onEntry</execution-type>
+			</notification>
+		</actions>
+	</state>
+	<state>
+		<name>Rejected</name>
+		<metadata>
+			<![CDATA[
+				{
+					"terminal": true,
+					"xy": [
+						531,
+						430
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Reject</name>
+				<script>
+					<![CDATA[import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.petra.mail.MailEngine;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.portal.kernel.util.GetterUtil;
+
+final Log logger = LogFactoryUtil.getLog("RSPCA: Book Home Visit - Reject");
+
+final String from = "test@liferay.com";
+final String subject ="Thank you for your application";
+
+final String to = workflowContext.get("emailAddress");
+final String mainContact = workflowContext.get("mainContact");
+
+String body =
+    "Dear " + mainContact + "\n" +
+    "Thank you for booking your interest but on this occassion we have decided to reject your application.\n\n" +
+    "One of the team will be in touch to discuss this.\n\n" +
+    "Many thanks,\n\n" +
+    "The Re-homing Team\n\n";
+
+try {
+  MailEngine.send(from, to, subject, body)
+} catch(Exception e) {
+  logger.error(e);
+}
+
+final long rehomingRecVerId = GetterUtil.getLong((String)workflowContext.get("rehomingRecVerId"));
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(rehomingRecVerId);
+recVer.setStatus(WorkflowConstants.getLabelStatus("denied"));
+DDMFormInstanceRecordVersionLocalServiceUtil.updateDDMFormInstanceRecordVersion(recVer);
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("denied"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+	</state>
+	<state>
+		<name>Application Withdrawn</name>
+		<metadata>
+			<![CDATA[
+				{
+					"terminal": true,
+					"xy": [
+						320,
+						447
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Application Withdrawn</name>
+				<script>
+					<![CDATA[import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.petra.mail.MailEngine;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.portal.kernel.util.GetterUtil;
+
+final Log logger = LogFactoryUtil.getLog("RSPCA: Book Home Visit - Application Withdrawn");
+
+final String from = "test@liferay.com";
+final String subject ="Your application has been withdrawn";
+
+final String to = workflowContext.get("emailAddress");
+final String mainContact = workflowContext.get("mainContact");
+
+String body =
+    "Dear " + mainContact + "\n" +
+    "We have received your request to withdraw your application.\n\n" +
+    "If your circumstances change then please reapply in the future.\n\n" +
+    "Many thanks,\n\n" +
+    "The Re-homing Team\n\n";
+
+try {
+  MailEngine.send(from, to, subject, body)
+} catch(Exception e) {
+  logger.error(e);
+}
+
+final long rehomingRecVerId = GetterUtil.getLong((String)workflowContext.get("rehomingRecVerId"));
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(rehomingRecVerId);
+recVer.setStatus(WorkflowConstants.getLabelStatus("denied"));
+DDMFormInstanceRecordVersionLocalServiceUtil.updateDDMFormInstanceRecordVersion(recVer);
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("denied"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+	</state>
+	<task>
+		<name>Review Appointment</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						493,
+						128
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<notification>
+				<name>Send Notification</name>
+				<description>
+					<![CDATA[]]>
+				</description>
+				<template>
+					<![CDATA[${(mainContact)!"Test"} has requested a home visit on ${(dateOfVisit)!"Test"} at ${(timeOfVisit)!"Test"}]]>
+				</template>
+				<template-language>freemarker</template-language>
+				<notification-type>user-notification</notification-type>
+				<recipients receptionType="to">
+					<assignees />
+				</recipients>
+				<execution-type>onAssignment</execution-type>
+			</notification>
+		</actions>
+		<assignments>
+			<roles>
+				<role>
+					<role-type>regular</role-type>
+					<name>Rehoming Manager</name>
+					<auto-create>true</auto-create>
+				</role>
+			</roles>
+		</assignments>
+		<transitions>
+			<transition>
+				<name>Request Alternative</name>
+				<target>Request New Appointment</target>
+				<default>true</default>
+			</transition>
+			<transition>
+				<name>Reject</name>
+				<target>Rejected</target>
+				<default>false</default>
+			</transition>
+			<transition>
+				<name>Accept</name>
+				<target>Update Calendar Booking</target>
+				<default>false</default>
+			</transition>
+		</transitions>
+	</task>
+	<task>
+		<name>Request New Appointment</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						49.5,
+						242
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Request Alternative</name>
+				<script>
+					<![CDATA[import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.petra.mail.MailEngine;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.portal.kernel.util.GetterUtil;
+
+final Log logger = LogFactoryUtil.getLog("RSPCA: Book Home Visit - Request Alternative");
+
+final String from = "test@liferay.com";
+final String subject ="Your Home Visit request";
+
+final String to = workflowContext.get("emailAddress");
+final String mainContact = workflowContext.get("mainContact");
+final String dateOfVisit = workflowContext.get("dateOfVisit");
+final String timeOfVisit = workflowContext.get("timeOfVisit");
+final String applicationId = workflowContext.get("applicationId");
+final long rehomingRecVerId = GetterUtil.getLong((String)workflowContext.get("rehomingRecVerId"));
+
+String body =
+    "Dear " + mainContact + "\n" +
+    "Unfortunately, we cannot confirm your selected appointment on " + dateOfVisit + " at " + timeOfVisit + ".\n\n" +
+    "Please could you select an alternative using the following link.\n\n" +
+    "https://sevendotforever.liferayuk.net/web/rspca/book-home-visit?appId=" + applicationId + "&rehomingRecVerId=" + rehomingRecVerId;
+    "Many thanks,\n\n" +
+    "The Re-homing Team\n\n";
+
+try {
+  MailEngine.send(from, to, subject, body)
+} catch(Exception e) {
+  logger.error(e);
+}
+
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(rehomingRecVerId);
+recVer.setStatus(WorkflowConstants.getLabelStatus("pending"));
+DDMFormInstanceRecordVersionLocalServiceUtil.updateDDMFormInstanceRecordVersion(recVer);
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<assignments>
+			<user />
+		</assignments>
+		<transitions>
+			<transition>
+				<name>Resubmit</name>
+				<target>Review Appointment</target>
+				<default>true</default>
+			</transition>
+			<transition>
+				<name>Withdraw Application</name>
+				<target>Application Withdrawn</target>
+				<default>false</default>
+			</transition>
+		</transitions>
+	</task>
+</workflow-definition>

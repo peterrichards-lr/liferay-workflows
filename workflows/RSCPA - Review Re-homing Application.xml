@@ -1,0 +1,266 @@
+<?xml version="1.0"?>
+
+<workflow-definition xmlns="urn:liferay.com:liferay-workflow_7.4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd">
+    <name>RSCPA - Review Re-homing Application</name>
+    <description>The workflow is part of a collection of workflows, which together demonstrate a re-homing use case</description>
+    <version>9</version>
+    <state>
+        <name>Home Visit Complete</name>
+        <metadata>
+            <![CDATA[
+				{
+					"xy": [
+						85,
+						138
+					]
+				}
+			]]>
+        </metadata>
+        <actions>
+            <action>
+                <name>Populate WorkflowContext with Re-homing Application</name>
+                <script>
+                    <![CDATA[import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.dynamic.data.mapping.storage.DDMFormFieldValue;
+import com.liferay.dynamic.data.mapping.model.Value;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+
+def normaliseValue(String value) {
+    if (value == null || "".equals(value)) {
+        return value;
+    }
+    return value.replaceAll("\\[\"","").replaceAll("\"\\]","");
+}
+
+final Log logger = LogFactoryUtil.getLog("RSCPA - Review Re-homing Application - Populate WorkflowContext with Re-homing Application");
+
+final long rehomingRecVerId = GetterUtil.getLong((String)workflowContext.get("rehomingRecVerId"));
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(rehomingRecVerId);
+final List<DDMFormFieldValue> formFieldVals = recVer.getDDMFormValues().getDDMFormFieldValues();
+
+final List<String> requiredFieldReferences = Arrays.asList("applicationId", "firstName", "title", "surname", "emailAddress", "rehomingType", "petName");
+
+for (DDMFormFieldValue fmval : formFieldVals) {
+    final String fieldReference = fmval.getFieldReference();
+    if (requiredFieldReferences.contains(fieldReference)) {
+        final Value val = fmval.getValue();
+        final String data = normaliseValue(val.getString(Locale.ROOT));
+        logger.info("Adding " + fieldReference + " : " + data + " to the WorkflowContext");
+        workflowContext.put(fieldReference, data);
+    }
+}
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);]]>
+                </script>
+                <script-language>groovy</script-language>
+                <execution-type>onExit</execution-type>
+            </action>
+            <action>
+                <name>Populate WorkflowContext with Home Visit Report</name>
+                <script>
+                    <![CDATA[import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.dynamic.data.mapping.storage.DDMFormFieldValue;
+import com.liferay.dynamic.data.mapping.model.Value;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+
+def normaliseValue(String value) {
+    if (value == null || "".equals(value)) {
+        return value;
+    }
+    return value.replaceAll("\\[\"","").replaceAll("\"\\]","");
+}
+
+final Log logger = LogFactoryUtil.getLog("RSCPA - Review Re-homing Application - Populate WorkflowContext with Home Visit Report");
+
+final long recVerId = GetterUtil.getLong((String)workflowContext.get(WorkflowConstants.CONTEXT_ENTRY_CLASS_PK));
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(recVerId);
+final List<DDMFormFieldValue> formFieldVals = recVer.getDDMFormValues().getDDMFormFieldValues();
+
+final List<String> requiredFieldReferences = Arrays.asList("applicationId", "rehomingRecVerId", "mainContact", "dateOfVisit");
+
+for (DDMFormFieldValue fmval : formFieldVals) {
+    final String fieldReference = fmval.getFieldReference();
+    if (requiredFieldReferences.contains(fieldReference)) {
+        final Value val = fmval.getValue();
+        final String data = normaliseValue(val.getString(Locale.ROOT));
+        logger.info("Adding " + fieldReference + " : " + data + " to the WorkflowContext");
+        workflowContext.put(fieldReference, data);
+    }
+}
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);]]>
+                </script>
+                <script-language>groovy</script-language>
+                <execution-type>onEntry</execution-type>
+            </action>
+        </actions>
+        <initial>true</initial>
+        <transitions>
+            <transition>
+                <name>Review Application</name>
+                <target>Application Review</target>
+                <default>true</default>
+            </transition>
+        </transitions>
+    </state>
+    <state>
+        <name>Approved</name>
+        <metadata>
+            <![CDATA[
+				{
+					"terminal": true,
+					"xy": [
+						723,
+						93
+					]
+				}
+			]]>
+        </metadata>
+        <actions>
+            <action>
+                <name>Approved</name>
+                <script>
+                    <![CDATA[import com.liferay.petra.mail.MailEngine;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+final Log logger = LogFactoryUtil.getLog("RSCPA - Review Re-homing Application - Approved");
+
+final String from = "test@liferay.com";
+
+final String to = workflowContext.get("emailAddress");
+final String mainContact = workflowContext.get("mainContact");
+final String petName = workflowContext.get("petName");
+final String applicationType = workflowContext.get("rehomingType");
+
+final String subject ="Your " + applicationType + " application for " + petName + " has been approved";
+
+String body =
+    "Dear " + mainContact + "\n" +
+    "We are delighted to inform you that your application to re-home " + petName + " has been approved.\n\n" +
+    "One of the team will be in touch to discuss the next steps.\n\n" +
+    "Many thanks,\n\n" +
+    "The Re-homing Team\n\n";
+
+try {
+  MailEngine.send(from, to, subject, body)
+} catch(Exception e) {
+  logger.error(e);
+}
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("approved"), workflowContext);]]>
+                </script>
+                <script-language>groovy</script-language>
+                <execution-type>onEntry</execution-type>
+            </action>
+        </actions>
+    </state>
+    <state>
+        <name>Rejected</name>
+        <metadata>
+            <![CDATA[
+				{
+					"terminal": true,
+					"xy": [
+						719,
+						296
+					]
+				}
+			]]>
+        </metadata>
+        <actions>
+            <action>
+                <name>Reject</name>
+                <script>
+                    <![CDATA[import com.liferay.petra.mail.MailEngine;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+final Log logger = LogFactoryUtil.getLog("RSCPA - Review Re-homing Application - Reject");
+
+final String from = "test@liferay.com";
+final String subject ="Thank you for your application";
+
+final String to = workflowContext.get("emailAddress");
+final String mainContact = workflowContext.get("mainContact");
+
+String body =
+    "Dear " + mainContact + "\n" +
+    "Thank you for booking your interest but on this occassion we have decided to reject your application.\n\n" +
+    "One of the team will be in touch to discuss this.\n\n" +
+    "Many thanks,\n\n" +
+    "The Re-homing Team\n\n";
+
+try {
+  MailEngine.send(from, to, subject, body)
+} catch(Exception e) {
+  logger.error(e);
+}
+
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("denied"), workflowContext);]]>
+                </script>
+                <script-language>groovy</script-language>
+                <execution-type>onEntry</execution-type>
+            </action>
+        </actions>
+    </state>
+    <task>
+        <name>Application Review</name>
+        <metadata>
+            <![CDATA[
+				{
+					"xy": [
+						355,
+						125
+					]
+				}
+			]]>
+        </metadata>
+        <actions>
+            <notification>
+                <name>Review Application</name>
+                <description>
+                    <![CDATA[]]>
+                </description>
+                <template>
+                    <![CDATA[A Home Visit Report is awaiting review]]>
+                </template>
+                <template-language>freemarker</template-language>
+                <notification-type>user-notification</notification-type>
+                <recipients receptionType="to">
+                    <user />
+                </recipients>
+                <execution-type>onAssignment</execution-type>
+            </notification>
+        </actions>
+        <assignments>
+            <user />
+        </assignments>
+        <transitions>
+            <transition>
+                <name>Approve</name>
+                <target>Approved</target>
+                <default>false</default>
+            </transition>
+            <transition>
+                <name>Reject</name>
+                <target>Rejected</target>
+                <default>true</default>
+            </transition>
+        </transitions>
+    </task>
+</workflow-definition>
