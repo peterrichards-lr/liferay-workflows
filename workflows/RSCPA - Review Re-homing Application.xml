@@ -3,7 +3,7 @@
 <workflow-definition xmlns="urn:liferay.com:liferay-workflow_7.4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd">
     <name>RSCPA - Review Re-homing Application</name>
     <description>The workflow is part of a collection of workflows, which together demonstrate a re-homing use case</description>
-    <version>9</version>
+    <version>2</version>
     <state>
         <name>Home Visit Complete</name>
         <metadata>
@@ -159,6 +159,11 @@ try {
 } catch(Exception e) {
   logger.error(e);
 }
+
+final long rehomingRecVerId = GetterUtil.getLong((String)workflowContext.get("rehomingRecVerId"));
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(rehomingRecVerId);
+recVer.setStatus(WorkflowConstants.getLabelStatus("approved"));
+DDMFormInstanceRecordVersionLocalServiceUtil.updateDDMFormInstanceRecordVersion(recVer);
 
 WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("approved"), workflowContext);]]>
                 </script>
