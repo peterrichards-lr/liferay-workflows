@@ -3,7 +3,7 @@
 <workflow-definition xmlns="urn:liferay.com:liferay-workflow_7.4.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd">
 	<name>RSPCA - Re-homing Application</name>
 	<description>The workflow is part of a collection of workflows, which together demonstrate a re-homing use case</description>
-	<version>1</version>
+	<version>2</version>
 	<state>
 		<name>Start Node</name>
 		<metadata>
@@ -43,7 +43,7 @@ final long recVerId = GetterUtil.getLong((String)workflowContext.get(WorkflowCon
 final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(recVerId);
 final List<DDMFormFieldValue> formFieldVals = recVer.getDDMFormValues().getDDMFormFieldValues();
 
-final List<String> requiredFieldReferences = Arrays.asList("applicationId", "firstName", "title", "surname", "emailAddress", "rehomingType", "petName");
+final List<String> requiredFieldReferences = Arrays.asList("applicationId", "firstName", "title", "surname", "emailAddress", "rehomingType", "petName","userEmailAddress", "petType");
 
 for (DDMFormFieldValue fmval : formFieldVals) {
     final String fieldReference = fmval.getFieldReference();
@@ -53,6 +53,21 @@ for (DDMFormFieldValue fmval : formFieldVals) {
         logger.info("Adding " + fieldReference + " : " + data + " to the WorkflowContext");
         workflowContext.put(fieldReference, data);
     }
+}
+
+final Map<String, String> petTypeMap = new HashMap<String, String>() {{
+    put("Option28911312", "bird");
+    put("Option07450560", "cat");
+    put("Option79031470", "dog");
+    put("Option37830096", "goat");
+    put("Option60473564", "reptile");
+}};
+
+final String petType = workflowContext.get("petType");
+if (petTypeMap.containsKey(petType)) {
+    final String newPetType = petTypeMap.get(petType);
+    logger.info("Updating petType : " + newPetType + " in the WorkflowContext");
+    workflowContext.put("petType", newPetType);
 }
 
 final String title = workflowContext.get("title");
@@ -96,14 +111,19 @@ WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending
 				<name>Pending Home Visit</name>
 				<description>Pending</description>
 				<script>
-					<![CDATA[import com.liferay.petra.mail.MailEngine
+					<![CDATA[import com.liferay.expando.kernel.model.ExpandoTableConstants;
+import com.liferay.expando.kernel.service.ExpandoValueLocalServiceUtil;
+import com.liferay.petra.mail.MailEngine;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
 import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 
 final Log logger = LogFactoryUtil.getLog("RSPCA: Re-homing Application - Pending Home Visit");
 
+final long companyId = 20099;
 final String from = "test@liferay.com";
 final String subject ="Book your Home Visit";
 
@@ -127,6 +147,18 @@ try {
 } catch(Exception e) {
   logger.error(e);
 }
+
+final String petType = workflowContext.get("petType");
+final String userEmailAddress = workflowContext.get("userEmailAddress");
+final User user = UserLocalServiceUtil.getUserByEmailAddress(companyId, userEmailAddress);
+logger.info("Updating \"Applied For\" for " + userEmailAddress + " [" + user.getUserId() + "] to " + petType);
+ExpandoValueLocalServiceUtil.addValue(
+    companyId,
+    User.class.getName(),
+    ExpandoTableConstants.DEFAULT_TABLE_NAME,
+    "Applied For",
+    user.getUserId(),
+    petType);
 
 WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);]]>
 				</script>
