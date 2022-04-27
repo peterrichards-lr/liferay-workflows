@@ -5,7 +5,7 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd"
 >
-	<version>66</version>
+	<version>82</version>
 	<state>
 		<name>Process Form</name>
 		<metadata>
@@ -59,16 +59,21 @@ final Map<String, String> userDataFieldMap = new HashMap<String, String>() {{
     put("Email address", "emailAddress");
 }};
 
+final List<String> uploadDocuments = new ArrayList();
+
 for (DDMFormFieldValue fmval : formFieldVals) {
+    final DDMFormField formField = fmval.getDDMFormField();
     final String fieldReference = fmval.getFieldReference();
-    if (requiredFieldReferences.contains(fieldReference)) {
+    if ("document_library".equals(formField.getType())) {
+        final Value val = fmval.getValue();
+        uploadDocuments.add(val.getString(Locale.ROOT));
+    } else if (requiredFieldReferences.contains(fieldReference)) {
         final Value val = fmval.getValue();
         final String data = normaliseValue(val.getString(Locale.ROOT));
         logger.info("Adding " + fieldReference + " : " + data + " to the WorkflowContext");
         workflowContext.put(fieldReference, data);
     } else if (fieldReference.contains("UsersDataField")) {
         logger.info("Processing user data field - " + fieldReference);
-        final DDMFormField formField = fmval.getDDMFormField();
         final LocalizedValue label = formField.getLabel();
         final String labelText = label.getString(locale);
         if (userDataFieldMap.containsKey(labelText)) {
@@ -81,6 +86,11 @@ for (DDMFormFieldValue fmval : formFieldVals) {
             logger.info("User data field not found");
         }
     }
+}
+
+if (uploadDocuments.size() > 0) {
+    logger.info("Adding " + uploadDocuments.size() + " to the WorkflowContext");
+    workflowContext.put("uploadDocuments", uploadDocuments);
 }
 
 workflowContext.put("recVerId", recVerId);
@@ -202,8 +212,8 @@ WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("denied"
 			<![CDATA[
 				{
 					"xy": [
-						763,
-						250
+						757,
+						109
 					]
 				}
 			]]>
@@ -338,8 +348,8 @@ try {
 		</actions>
 		<transitions>
 			<transition>
-				<name>Approved</name>
-				<target>Approve Application</target>
+				<name>Process Documents</name>
+				<target>Process Documents</target>
 				<default>true</default>
 			</transition>
 		</transitions>
@@ -351,8 +361,8 @@ try {
 				{
 					"terminal": true,
 					"xy": [
-						768,
-						418
+						741,
+						500
 					]
 				}
 			]]>
@@ -422,6 +432,94 @@ WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending
 			<transition>
 				<name>Withdrawn</name>
 				<target>Reject Application</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<name>Process Documents</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						746.5,
+						338
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Process Documents</name>
+				<script>
+					<![CDATA[import com.liferay.document.library.kernel.service.DLAppLocalServiceUtil;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.repository.model.Folder;
+import com.liferay.portal.kernel.repository.model.FileEntry;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Process Documents");
+
+try {
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final long groupId = Long.parseLong(workflowContext.get("groupId"));
+    final String emailAddress = workflowContext.get("emailAddress");
+    final List<String> uploadDocuments = workflowContext.get("uploadDocuments");
+
+    final User supplier = UserLocalServiceUtil.getUserByEmailAddress(companyId, emailAddress);
+
+    final String companyName = workflowContext.get("companyName");
+
+    final Folder supplierSubmissionsFolder = DLAppLocalServiceUtil.getFolder(groupId, 0, "Supplier Submissions");
+
+    Folder companyFolder;
+    try {
+        companyFolder = DLAppLocalServiceUtil.getFolder(groupId, supplierSubmissionsFolder.getFolderId(), companyName);
+        logger.info("Submissions folder already exists for " + companyName);
+    } catch(com.liferay.document.library.kernel.exception.NoSuchFolderException nsfe) {
+        logger.info("Creating new folder for " + companyName);
+        final String folderDescription = "Documents provided by " + companyName + " on applying to become a supplier.";
+        companyFolder = DLAppLocalServiceUtil.addFolder(supplier.getUserId(), groupId, supplierSubmissionsFolder.getFolderId(), companyName, folderDescription, serviceContext);
+    }
+
+    if (uploadDocuments.size() > 0) {
+        final ObjectMapper objectMapper = new ObjectMapper();
+        for(String document : uploadDocuments) {
+            logger.info(document);
+            try {
+                Map<String, String> documentMap = objectMapper.readValue(document, Map.class);
+                logger.info("documentMap is " + documentMap);
+                long fileEntryId = Long.parseLong(documentMap.get("fileEntryId"));
+                logger.info("fileEntryId is " + fileEntryId);
+                final FileEntry fileEntry =  DLAppLocalServiceUtil.moveFileEntry(supplier.getUserId(), fileEntryId, companyFolder.getFolderId(), serviceContext);
+                logger.info(fileEntry);
+            }
+            catch (Exception e) {
+               logger.error(e);
+            }
+        }
+    }
+
+    WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);
+} catch(Exception e) {
+    logger.error(e);
+    WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("incomplete"), workflowContext);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<transitions>
+			<transition>
+				<name>Approved</name>
+				<target>Approve Application</target>
 				<default>true</default>
 			</transition>
 		</transitions>
