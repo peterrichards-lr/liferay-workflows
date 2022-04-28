@@ -5,7 +5,7 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd"
 >
-	<version>83</version>
+	<version>84</version>
 	<state>
 		<name>Process Form</name>
 		<metadata>
@@ -234,7 +234,7 @@ try {
 			<notification>
 				<name>Application Rejected</name>
 				<description>
-					<![CDATA[]]>
+					<![CDATA[Application Outcome]]>
 				</description>
 				<template>
 					<![CDATA[Your application has been rejected]]>
@@ -291,8 +291,8 @@ import com.liferay.portal.kernel.service.CompanyLocalServiceUtil;
 import com.liferay.portal.kernel.service.ListTypeLocalServiceUtil;
 import com.liferay.portal.kernel.service.OrganizationServiceUtil;
 import com.liferay.portal.kernel.service.RoleLocalServiceUtil;
+import com.liferay.portal.kernel.service.UserGroupRoleLocalServiceUtil;
 import com.liferay.portal.kernel.service.UserLocalServiceUtil;
-import com.liferay.portal.kernel.service.UserServiceUtil;
 import com.liferay.portal.kernel.service.ServiceContext;
 import com.liferay.portal.kernel.util.GetterUtil;
 import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
@@ -358,10 +358,7 @@ try {
     Organization organization = OrganizationServiceUtil.addOrganization(parentOrganizationId, companyName, type, regionId, countryId, statusId, null, true,
     Arrays.asList(address),  Arrays.asList(emailAddress), Collections.emptyList(),  Arrays.asList(phone),  Arrays.asList(website), serviceContext);
 
-    //final User supplier = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddressStr);
-    final User supplier = UserServiceUtil.getUserByEmailAddress(companyId, emailAddressStr);
-
-    final long[] userIds = [supplier.getUserId()];
+    final User supplier = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddressStr);
 
     if (organization != null) {
         logger.info("Adding " + emailAddressStr + " to " + organization.getName() + "[" + organization.getOrganizationId() + "]");
@@ -370,14 +367,16 @@ try {
         logger.info("Adding " + emailAddressStr + " to " + RoleConstants.ORGANIZATION_ADMINISTRATOR + "[" + orgAdminRole.getRoleId() + "]");
 
         //UserLocalServiceUtil.addRoleUser(orgAdminRole.getRoleId(), supplier.getUserId());
-        UserServiceUtil.addRoleUsers(orgAdminRole.getRoleId(), userIds);
+        //UserServiceUtil.addRoleUsers(orgAdminRole.getRoleId(), userIds);
+        UserGroupRoleLocalServiceUtil.addUserGroupRole(supplier.getUserId(), organization.getGroupId(), orgAdminRole.getRoleId());
     }
 
     final String supplierAccountManagerRoleName = "Supplier Account Manager (Site Role)";
     final Role supplierAccountManagerRole = RoleLocalServiceUtil.getRole(companyId, supplierAccountManagerRoleName);
     logger.info("Adding " + emailAddressStr + " to " + supplierAccountManagerRoleName + "[" + supplierAccountManagerRole.getRoleId() + "]");
     //UserLocalServiceUtil.addRoleUser(supplierAccountManagerRole.getRoleId(), supplier.getUserId());
-    UserServiceUtil.addRoleUsers(supplierAccountManagerRole.getRoleId(), userIds);
+    //UserServiceUtil.addRoleUsers(supplierAccountManagerRole.getRoleId(), userIds);
+    UserGroupRoleLocalServiceUtil.addUserGroupRole(supplier.getUserId(), groupId, supplierAccountManagerRole.getRoleId());
 
     WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);
 } catch(Exception e) {
@@ -511,7 +510,7 @@ try {
 			<notification>
 				<name>Application Approved</name>
 				<description>
-					<![CDATA[]]>
+					<![CDATA[Application Outcome]]>
 				</description>
 				<template>
 					<![CDATA[Your application has been approved]]>
@@ -585,7 +584,7 @@ try {
 			<notification>
 				<name>Application Withdrawn</name>
 				<description>
-					<![CDATA[]]>
+					<![CDATA[Application Withdrawn]]>
 				</description>
 				<template>
 					<![CDATA[{companyName} have withdrawn their application]]>
@@ -843,7 +842,7 @@ try {
 			<notification>
 				<name>Notify Buying Team</name>
 				<description>
-					<![CDATA[]]>
+					<![CDATA[Received Supplier Application]]>
 				</description>
 				<template>
 					<![CDATA[We have received a new supplier application from ${companyName}.]]>
@@ -865,7 +864,7 @@ try {
 			<notification>
 				<name>Notify Supplier</name>
 				<description>
-					<![CDATA[]]>
+					<![CDATA[Application Received]]>
 				</description>
 				<template>
 					<![CDATA[We have received your application. It will be reviewed by one of our team.]]>
@@ -965,7 +964,7 @@ try {
 			<notification>
 				<name>Further Clarification</name>
 				<description>
-					<![CDATA[]]>
+					<![CDATA[Further Information Required]]>
 				</description>
 				<template>
 					<![CDATA[Thank you for your application. It has been reviewed by one of the team and they require further clarification before they can process your application.]]>
@@ -1054,7 +1053,7 @@ try {
 			<notification>
 				<name>Book Meeting</name>
 				<description>
-					<![CDATA[]]>
+					<![CDATA[Time to meet]]>
 				</description>
 				<template>
 					<![CDATA[Thank you for submitting your application. It has been reviewed by our team.
@@ -1072,7 +1071,7 @@ We now require an in person meeting. One of our team will be in touch.]]>
 			<notification>
 				<name>Post Meeting Review</name>
 				<description>
-					<![CDATA[]]>
+					<![CDATA[Post Meeting Review]]>
 				</description>
 				<template>
 					<![CDATA[Post meeting review for ${companyName}]]>
