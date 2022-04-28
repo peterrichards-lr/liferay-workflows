@@ -5,7 +5,7 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd"
 >
-	<version>82</version>
+	<version>83</version>
 	<state>
 		<name>Process Form</name>
 		<metadata>
@@ -188,6 +188,49 @@ WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("denied"
 				<script-language>groovy</script-language>
 				<execution-type>onEntry</execution-type>
 			</action>
+			<action>
+				<name>Update Audit</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String supplier, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53145
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("supplier", supplier);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final String action = "Application rejected";
+
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final User user = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddress)
+
+    if (user != null) {
+        audit(user.getUserId(), user.getEmailAddress(), companyName, action, serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
 			<notification>
 				<name>Application Rejected</name>
 				<description>
@@ -345,6 +388,49 @@ try {
 				<script-language>groovy</script-language>
 				<execution-type>onEntry</execution-type>
 			</action>
+			<action>
+				<name>Update Audit</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String supplier, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53145
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("supplier", supplier);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final String action = "Supplier organisation created";
+
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final User user = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddress)
+
+    if (user != null) {
+        audit(user.getUserId(), user.getEmailAddress(), companyName, action, serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onExit</execution-type>
+			</action>
 		</actions>
 		<transitions>
 			<transition>
@@ -374,7 +460,50 @@ try {
 					<![CDATA[import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
 import com.liferay.portal.kernel.workflow.WorkflowConstants;
 
-WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);]]>
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("approved"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+			<action>
+				<name>Update Audit</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String supplier, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53145
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("supplier", supplier);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final String action = "Application approved";
+
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final User user = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddress)
+
+    if (user != null) {
+        audit(user.getUserId(), user.getEmailAddress(), companyName, action, serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
 				</script>
 				<script-language>groovy</script-language>
 				<execution-type>onEntry</execution-type>
@@ -410,6 +539,49 @@ WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending
 			]]>
 		</metadata>
 		<actions>
+			<action>
+				<name>Update Audit</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String supplier, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53145
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("supplier", supplier);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final String action = "Application withdrawn";
+
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final User user = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddress)
+
+    if (user != null) {
+        audit(user.getUserId(), user.getEmailAddress(), companyName, action, serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onExit</execution-type>
+			</action>
 			<notification>
 				<name>Application Withdrawn</name>
 				<description>
@@ -515,6 +687,49 @@ try {
 				<script-language>groovy</script-language>
 				<execution-type>onEntry</execution-type>
 			</action>
+			<action>
+				<name>Update Audit</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String supplier, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53145
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("supplier", supplier);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final String action = "Supplier documents archived";
+
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final User user = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddress)
+
+    if (user != null) {
+        audit(user.getUserId(), user.getEmailAddress(), companyName, action, serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onExit</execution-type>
+			</action>
 		</actions>
 		<transitions>
 			<transition>
@@ -577,6 +792,49 @@ try {
 } catch(Exception e) {
   logger.error(e);
   WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("incomplete"), workflowContext);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+			<action>
+				<name>Update Audit</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String supplier, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53145
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("supplier", supplier);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final String action = "Supplier application received";
+
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final User user = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddress)
+
+    if (user != null) {
+        audit(user.getUserId(), user.getEmailAddress(), companyName, action, serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
 }]]>
 				</script>
 				<script-language>groovy</script-language>
@@ -661,6 +919,49 @@ try {
 			]]>
 		</metadata>
 		<actions>
+			<action>
+				<name>Update Audit</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String supplier, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53145
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("supplier", supplier);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final String action = "Further clarification requested";
+
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final User user = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddress)
+
+    if (user != null) {
+        audit(user.getUserId(), user.getEmailAddress(), companyName, action, serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
 			<notification>
 				<name>Further Clarification</name>
 				<description>
@@ -707,6 +1008,49 @@ try {
 			]]>
 		</metadata>
 		<actions>
+			<action>
+				<name>Update Audit</name>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String supplier, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53145
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("supplier", supplier);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final String action = "Site meeting requested";
+
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final User user = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddress)
+
+    if (user != null) {
+        audit(user.getUserId(), user.getEmailAddress(), companyName, action, serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
 			<notification>
 				<name>Book Meeting</name>
 				<description>
