@@ -5,7 +5,7 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd"
 >
-	<version>86</version>
+	<version>87</version>
 	<condition>
 		<name>Organisation Error Check</name>
 		<metadata>
@@ -1202,13 +1202,26 @@ We now require an in person meeting. One of our team will be in touch.]]>
 			</notification>
 		</actions>
 		<assignments>
-			<roles>
-				<role>
-					<role-type>site</role-type>
-					<name>ORL Buying</name>
-					<auto-create>false</auto-create>
-				</role>
-			</roles>
+			<scripted-assignment>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Reassign reviewer");
+
+final long buyerUserId = Long.parseLong(workflowContext.get(WorkflowConstants.CONTEXT_USER_ID));
+final User buyerUser =  UserLocalServiceUtil.fetchUserById(buyerUserId);
+
+logger.info("Re-assigning workflow to " + buyerUser.getEmailAddress());
+
+user = buyerUser;
+roles = null;]]>
+				</script>
+				<script-language>groovy</script-language>
+			</scripted-assignment>
 		</assignments>
 		<transitions>
 			<transition>
