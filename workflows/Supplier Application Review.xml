@@ -5,7 +5,57 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd"
 >
-	<version>84</version>
+	<version>85</version>
+	<condition>
+		<name>Organisation Error Check</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						747,
+						248
+					]
+				}
+			]]>
+		</metadata>
+		<script>
+			<![CDATA[
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+final Log logger = LogFactoryUtil.getLog("Supplier Application Review - Organisation Error Check");
+
+final long recVerId = GetterUtil.getLong((String)workflowContext.get(WorkflowConstants.CONTEXT_ENTRY_CLASS_PK));
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(recVerId);
+final long workflowStatus = recVer.getStatus();
+
+if (workflowStatus == WorkflowConstants.STATUS_INCOMPLETE || workflowStatus == WorkflowConstants.STATUS_DENIED)
+{
+    returnValue = "Error";
+} else {
+    returnValue =  "Continue"
+}
+
+logger.info("returnValue is " + returnValue);]]>
+		</script>
+		<script-language>groovy</script-language>
+		<transitions>
+			<transition>
+				<name>Continue</name>
+				<target>Process Documents</target>
+				<default>true</default>
+			</transition>
+			<transition>
+				<name>Error</name>
+				<target>Report Error</target>
+				<default>false</default>
+			</transition>
+		</transitions>
+	</condition>
 	<state>
 		<name>Process Form</name>
 		<metadata>
@@ -170,8 +220,8 @@ try {
 				{
 					"terminal": true,
 					"xy": [
-						610,
-						417
+						504,
+						412
 					]
 				}
 			]]>
@@ -255,8 +305,8 @@ try {
 			<![CDATA[
 				{
 					"xy": [
-						757,
-						109
+						714,
+						45
 					]
 				}
 			]]>
@@ -289,9 +339,11 @@ import com.liferay.portal.model.impl.PhoneImpl;
 import com.liferay.portal.model.impl.WebsiteImpl;
 import com.liferay.portal.kernel.service.CompanyLocalServiceUtil;
 import com.liferay.portal.kernel.service.ListTypeLocalServiceUtil;
+import com.liferay.portal.kernel.service.OrganizationLocalServiceUtil;
 import com.liferay.portal.kernel.service.OrganizationServiceUtil;
 import com.liferay.portal.kernel.service.RoleLocalServiceUtil;
 import com.liferay.portal.kernel.service.UserGroupRoleLocalServiceUtil;
+import com.liferay.portal.kernel.service.UserGroupRoleServiceUtil;
 import com.liferay.portal.kernel.service.UserLocalServiceUtil;
 import com.liferay.portal.kernel.service.ServiceContext;
 import com.liferay.portal.kernel.util.GetterUtil;
@@ -309,6 +361,12 @@ def getTypdId(String name, String type) {
     }
     logger.info("Returning id " + id);
     return id;
+}
+
+def wrap(long value) {
+    def valueArray = new long[1];
+    valueArray[0] = value;
+    return valueArray;
 }
 
 final Log logger = LogFactoryUtil.getLog("Create Organization");
@@ -355,8 +413,18 @@ try {
     final long countryId = 21316; // United Kingdom
     final long statusId = ListTypeConstants.ORGANIZATION_STATUS_DEFAULT;
 
-    Organization organization = OrganizationServiceUtil.addOrganization(parentOrganizationId, companyName, type, regionId, countryId, statusId, null, true,
-    Arrays.asList(address),  Arrays.asList(emailAddress), Collections.emptyList(),  Arrays.asList(phone),  Arrays.asList(website), serviceContext);
+    final organizationId = OrganizationLocalServiceUtil.getOrganizationId(companyId, companyName);
+    if (organizationId > 0)
+    {
+        logger.info("An organisation with that name already exists - " + companyName + "[" + organizationId + "]");
+        WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("incomplete"), workflowContext);
+        return;
+    }
+
+    final Organization organization =
+            OrganizationServiceUtil.addOrganization(parentOrganizationId, companyName, type, regionId, countryId, statusId, null, true,
+                                                        Arrays.asList(address),  Arrays.asList(emailAddress), Collections.emptyList(),
+                                                        Arrays.asList(phone),  Arrays.asList(website), serviceContext);
 
     final User supplier = UserLocalServiceUtil.fetchUserByEmailAddress(companyId, emailAddressStr);
 
@@ -366,17 +434,16 @@ try {
         final Role orgAdminRole = RoleLocalServiceUtil.getRole(companyId, RoleConstants.ORGANIZATION_ADMINISTRATOR)
         logger.info("Adding " + emailAddressStr + " to " + RoleConstants.ORGANIZATION_ADMINISTRATOR + "[" + orgAdminRole.getRoleId() + "]");
 
-        //UserLocalServiceUtil.addRoleUser(orgAdminRole.getRoleId(), supplier.getUserId());
-        //UserServiceUtil.addRoleUsers(orgAdminRole.getRoleId(), userIds);
-        UserGroupRoleLocalServiceUtil.addUserGroupRole(supplier.getUserId(), organization.getGroupId(), orgAdminRole.getRoleId());
+        UserGroupRoleServiceUtil.addUserGroupRoles(supplier.getUserId(), organization.getGroupId(), wrap(orgAdminRole.getRoleId()));
+    } else {
+        logger.info("The organization object has a null value");
     }
 
     final String supplierAccountManagerRoleName = "Supplier Account Manager (Site Role)";
     final Role supplierAccountManagerRole = RoleLocalServiceUtil.getRole(companyId, supplierAccountManagerRoleName);
     logger.info("Adding " + emailAddressStr + " to " + supplierAccountManagerRoleName + "[" + supplierAccountManagerRole.getRoleId() + "]");
-    //UserLocalServiceUtil.addRoleUser(supplierAccountManagerRole.getRoleId(), supplier.getUserId());
-    //UserServiceUtil.addRoleUsers(supplierAccountManagerRole.getRoleId(), userIds);
-    UserGroupRoleLocalServiceUtil.addUserGroupRole(supplier.getUserId(), groupId, supplierAccountManagerRole.getRoleId());
+
+    UserGroupRoleServiceUtil.addUserGroupRoles(supplier.getUserId(), groupId, wrap(supplierAccountManagerRole.getRoleId()));
 
     WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);
 } catch(Exception e) {
@@ -433,8 +500,8 @@ try {
 		</actions>
 		<transitions>
 			<transition>
-				<name>Process Documents</name>
-				<target>Process Documents</target>
+				<name>Continue</name>
+				<target>Organisation Error Check</target>
 				<default>true</default>
 			</transition>
 		</transitions>
@@ -446,8 +513,8 @@ try {
 				{
 					"terminal": true,
 					"xy": [
-						741,
-						500
+						612,
+						492
 					]
 				}
 			]]>
@@ -613,8 +680,8 @@ try {
 			<![CDATA[
 				{
 					"xy": [
-						746.5,
-						338
+						591.5,
+						314
 					]
 				}
 			]]>
@@ -738,14 +805,52 @@ try {
 			</transition>
 		</transitions>
 	</state>
+	<state>
+		<name>Report Error</name>
+		<metadata>
+			<![CDATA[
+				{
+					"terminal": true,
+					"xy": [
+						775,
+						492
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<notification>
+				<name>Report Error</name>
+				<description>
+					<![CDATA[Supplier application error]]>
+				</description>
+				<template>
+					<![CDATA[An error occurred when processing supplier application for ${companyName}]]>
+				</template>
+				<template-language>freemarker</template-language>
+				<notification-type>email</notification-type>
+				<notification-type>user-notification</notification-type>
+				<recipients receptionType="to">
+					<roles>
+						<role>
+							<role-type>site</role-type>
+							<name>ORL Buying</name>
+							<auto-create>false</auto-create>
+						</role>
+					</roles>
+				</recipients>
+				<execution-type>onEntry</execution-type>
+			</notification>
+		</actions>
+	</state>
 	<task>
 		<name>Review Application</name>
 		<metadata>
 			<![CDATA[
 				{
 					"xy": [
-						258,
-						122
+						224,
+						108
 					]
 				}
 			]]>
@@ -1000,8 +1105,8 @@ try {
 			<![CDATA[
 				{
 					"xy": [
-						561,
-						77
+						491,
+						79
 					]
 				}
 			]]>
