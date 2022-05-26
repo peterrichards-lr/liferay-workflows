@@ -1,0 +1,315 @@
+<?xml version="1.0"?>
+
+<workflow-definition
+	xmlns="urn:liferay.com:liferay-workflow_7.4.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd"
+>
+	<version>12</version>
+	<state>
+		<name>Process Form</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						100,
+						40
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Populate WorkflowContext</name>
+				<script>
+					<![CDATA[import com.liferay.dynamic.data.mapping.model.DDMFormField;
+import com.liferay.dynamic.data.mapping.model.DDMFormInstanceRecordVersion;
+import com.liferay.dynamic.data.mapping.model.LocalizedValue;
+import com.liferay.dynamic.data.mapping.model.Value;
+import com.liferay.dynamic.data.mapping.service.DDMFormInstanceRecordVersionLocalServiceUtil;
+import com.liferay.dynamic.data.mapping.storage.DDMFormFieldValue;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+import java.util.Locale;
+
+def normaliseValue(String value) {
+    if (value == null || "".equals(value)) {
+        return value;
+    }
+    return value.replaceAll("\\[\"","").replaceAll("\"\\]","");
+}
+
+final Log logger = LogFactoryUtil.getLog("Upload Passport - Populate WorkflowContext");
+
+final long recVerId = GetterUtil.getLong((String)workflowContext.get(WorkflowConstants.CONTEXT_ENTRY_CLASS_PK));
+final DDMFormInstanceRecordVersion recVer = DDMFormInstanceRecordVersionLocalServiceUtil.getFormInstanceRecordVersion(recVerId);
+final Locale locale = recVer.getDDMForm().getDefaultLocale();
+final List<DDMFormFieldValue> formFieldVals = recVer.getDDMFormValues().getDDMFormFieldValues();
+
+final List<String> requiredFieldReferences = Arrays.asList();
+
+final Map<String, String> userDataFieldMap = new HashMap<String, String>();
+
+final List<String> uploadDocuments = new ArrayList();
+
+for (DDMFormFieldValue fmval : formFieldVals) {
+    final DDMFormField formField = fmval.getDDMFormField();
+    final String fieldReference = fmval.getFieldReference();
+    if ("document_library".equals(formField.getType())) {
+        final Value val = fmval.getValue();
+        uploadDocuments.add(val.getString(Locale.ROOT));
+    } else if (requiredFieldReferences.contains(fieldReference)) {
+        final Value val = fmval.getValue();
+        final String data = normaliseValue(val.getString(Locale.ROOT));
+        logger.info("Adding " + fieldReference + " : " + data + " to the WorkflowContext");
+        workflowContext.put(fieldReference, data);
+    } else if (fieldReference.contains("UsersDataField")) {
+        logger.info("Processing user data field - " + fieldReference);
+        final LocalizedValue label = formField.getLabel();
+        final String labelText = label.getString(locale);
+        if (userDataFieldMap.containsKey(labelText)) {
+            final String fieldName = userDataFieldMap.get(labelText);
+            final Value val = fmval.getValue();
+            final String data = normaliseValue(val.getString(Locale.ROOT));
+            logger.info("Adding " + fieldName + " : " + data + " to the WorkflowContext");
+            workflowContext.put(fieldName, data);
+        } else {
+            logger.info("User data field not found");
+        }
+    }
+}
+
+if (uploadDocuments.size() > 0) {
+    logger.info("Adding " + uploadDocuments.size() + " to the WorkflowContext");
+    workflowContext.put("uploadDocuments", uploadDocuments);
+}
+
+workflowContext.put("recVerId", recVerId);
+workflowContext.put("locale", locale);
+WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<initial>true</initial>
+		<transitions>
+			<transition>
+				<name>Update User</name>
+				<target>Update User Flag</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<name>End</name>
+		<metadata>
+			<![CDATA[
+				{
+					"terminal": true,
+					"xy": [
+						755,
+						416
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Approve</name>
+				<description>Approve</description>
+				<script>
+					<![CDATA[com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil.updateStatus(com.liferay.portal.kernel.workflow.WorkflowConstants.getLabelStatus("approved"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+	</state>
+	<state>
+		<name>Update User Flag</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						323,
+						148
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Set Passport Uploaded</name>
+				<script>
+					<![CDATA[import com.liferay.expando.kernel.model.ExpandoBridge;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.search.Indexer;
+import com.liferay.portal.kernel.search.IndexerRegistryUtil;
+import com.liferay.portal.kernel.security.permission.PermissionChecker;
+import com.liferay.portal.kernel.security.permission.PermissionCheckerFactoryUtil;
+import com.liferay.portal.kernel.security.permission.PermissionThreadLocal;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+import java.util.Locale;
+
+final Log logger = LogFactoryUtil.getLog("Upload Passport - Set Passport Uploaded");
+
+final long userId = GetterUtil.getLong((String)workflowContext.get(WorkflowConstants.CONTEXT_USER_ID));
+
+try {
+  final User user = UserLocalServiceUtil.getUser(userId);
+
+  PermissionChecker checker = PermissionCheckerFactoryUtil.create(user);
+  PermissionThreadLocal.setPermissionChecker(checker);
+
+  ExpandoBridge userExpandoBridge = user.getExpandoBridge();
+
+  final String applicationSubmitted = "Passport Uploaded";
+  if (userExpandoBridge.hasAttribute(applicationSubmitted)) {
+    logger.info("Mark user as having uploaded their passport");
+    userExpandoBridge.setAttribute(applicationSubmitted, true);
+  }
+
+  UserLocalServiceUtil.updateUser(user);
+
+  if ((serviceContext == null) || serviceContext.isIndexingEnabled()) {
+      Indexer<User> indexer = IndexerRegistryUtil.nullSafeGetIndexer(
+          User.class);
+
+      indexer.reindex(user);
+  }
+
+  WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);
+} catch(Exception e) {
+  logger.error(e);
+  WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("incomplete"), workflowContext);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<transitions>
+			<transition>
+				<name>Process Upload</name>
+				<target>Process Documents</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<name>Process Documents</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						548,
+						258
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Process Documents</name>
+				<script>
+					<![CDATA[import com.liferay.asset.kernel.model.AssetCategory;
+import com.liferay.asset.kernel.model.AssetVocabulary;
+import com.liferay.asset.kernel.model.AssetCategoryConstants;
+import com.liferay.asset.kernel.service.AssetCategoryLocalServiceUtil;
+import com.liferay.asset.kernel.service.AssetVocabularyLocalServiceUtil;
+import com.liferay.document.library.kernel.service.DLAppLocalServiceUtil;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.repository.model.Folder;
+import com.liferay.portal.kernel.repository.model.FileEntry;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.portal.kernel.util.GetterUtil;
+import com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil;
+import com.liferay.portal.kernel.workflow.WorkflowConstants;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+def wrap(long value) {
+    def valueArray = new long[1];
+    valueArray[0] = value;
+    return valueArray;
+}
+
+final Log logger = LogFactoryUtil.getLog("Upload Passport - Process Documents");
+
+try {
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final long groupId = Long.parseLong(workflowContext.get("groupId"));
+    final long userId = GetterUtil.getLong((String)workflowContext.get(WorkflowConstants.CONTEXT_USER_ID));
+    final List<String> uploadDocuments = workflowContext.get("uploadDocuments");
+
+    final User user = UserLocalServiceUtil.getUser(userId);
+    final String emailAddress = user.getEmailAddress();
+
+    final Folder submissionsFolder = DLAppLocalServiceUtil.getFolder(groupId, 0, "Submissions");
+
+    Folder userFolder;
+    try {
+        userFolder = DLAppLocalServiceUtil.getFolder(groupId, submissionsFolder.getFolderId(), user.getScreenName());
+        logger.info("Submissions folder already exists for " + emailAddress);
+    } catch(com.liferay.document.library.kernel.exception.NoSuchFolderException nsfe) {
+        logger.info("Creating new folder for " + emailAddress);
+        final String folderDescription = "Documents provided by " + emailAddress + ".";
+        userFolder = DLAppLocalServiceUtil.addFolder(user.getUserId(), groupId, submissionsFolder.getFolderId(), user.getScreenName(), folderDescription, serviceContext);
+    }
+
+    final AssetVocabulary vocabulary =	AssetVocabularyLocalServiceUtil.fetchGroupVocabulary(groupId, "Document Submission");
+    logger.info("vocabulary is " + vocabulary.getName());
+    final AssetCategory category = AssetCategoryLocalServiceUtil.fetchCategory(groupId, AssetCategoryConstants.DEFAULT_PARENT_CATEGORY_ID, "Passport", vocabulary.getVocabularyId());
+    logger.info("category is " + category.getName());
+
+    if (uploadDocuments.size() > 0) {
+        final ObjectMapper objectMapper = new ObjectMapper();
+        for(String document : uploadDocuments) {
+            logger.info(document);
+            try {
+                Map<String, String> documentMap = objectMapper.readValue(document, Map.class);
+                logger.info("documentMap is " + documentMap);
+                long fileEntryId = Long.parseLong(documentMap.get("fileEntryId"));
+                logger.info("fileEntryId is " + fileEntryId);
+                final FileEntry fileEntry =  DLAppLocalServiceUtil.moveFileEntry(user.getUserId(), fileEntryId, userFolder.getFolderId(), serviceContext);
+                DLAppLocalServiceUtil.updateAsset(user.getUserId(), fileEntry, fileEntry.getLatestFileVersion(), wrap(category.getCategoryId()), new String[0], new long[0]);
+                logger.info(fileEntry);
+            }
+            catch (Exception e) {
+               logger.error(e);
+            }
+        }
+    }
+
+    WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("pending"), workflowContext);
+} catch(Exception e) {
+    logger.error(e);
+    WorkflowStatusManagerUtil.updateStatus(WorkflowConstants.getLabelStatus("incomplete"), workflowContext);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<transitions>
+			<transition>
+				<name>Complete</name>
+				<target>End</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+</workflow-definition>
