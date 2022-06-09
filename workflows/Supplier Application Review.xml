@@ -176,7 +176,7 @@ try {
         put("Option85105317", "Drinks & impulse");
     }};
 
-    final String productCategory = workflowContext.get("storageCategory");
+    final String productCategory = workflowContext.get("productCategory");
     if (productCategoryMap.containsKey(productCategory)) {
         final String newProductCategory = productCategoryMap.get(productCategory);
         logger.info("Updating productCategory : " + newProductCategory + " in the WorkflowContext");
