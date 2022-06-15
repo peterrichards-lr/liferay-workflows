@@ -5,15 +5,15 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd"
 >
-	<version>19</version>
+	<version>30</version>
 	<condition>
 		<name>Turnover above 100000</name>
 		<metadata>
 			<![CDATA[
 				{
 					"xy": [
-						762,
-						201
+						755,
+						208
 					]
 				}
 			]]>
@@ -40,13 +40,42 @@ else
 			</transition>
 		</transitions>
 	</condition>
+	<condition>
+		<name>Check Outcome</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						316.5,
+						461
+					]
+				}
+			]]>
+		</metadata>
+		<script>
+			<![CDATA[com.liferay.workflow.dynamic.data.mapping.form.action.outcome.evaluator.contidtion.evaluator.DDMFormActionOutcomeEvaluator]]>
+		</script>
+		<script-language>java</script-language>
+		<transitions>
+			<transition>
+				<name>Failure</name>
+				<target>Report Issue</target>
+				<default>true</default>
+			</transition>
+			<transition>
+				<name>Success</name>
+				<target>Send Email</target>
+				<default>false</default>
+			</transition>
+		</transitions>
+	</condition>
 	<state>
 		<name>Start</name>
 		<metadata>
 			<![CDATA[
 				{
 					"xy": [
-						100,
+						36,
 						40
 					]
 				}
@@ -68,8 +97,8 @@ else
 				{
 					"terminal": true,
 					"xy": [
-						50,
-						355
+						53,
+						333
 					]
 				}
 			]]>
@@ -92,8 +121,8 @@ else
 			<![CDATA[
 				{
 					"xy": [
-						306,
-						35
+						226,
+						82
 					]
 				}
 			]]>
@@ -110,8 +139,8 @@ else
 		</actions>
 		<transitions>
 			<transition>
-				<name>Audit</name>
-				<target>Inspect Workflow Context</target>
+				<name>Translate Form</name>
+				<target>Translate Options</target>
 				<default>true</default>
 			</transition>
 		</transitions>
@@ -122,8 +151,8 @@ else
 			<![CDATA[
 				{
 					"xy": [
-						551,
-						40
+						645,
+						26
 					]
 				}
 			]]>
@@ -152,8 +181,8 @@ else
 			<![CDATA[
 				{
 					"xy": [
-						213,
-						472
+						475,
+						479
 					]
 				}
 			]]>
@@ -170,8 +199,8 @@ else
 		</actions>
 		<transitions>
 			<transition>
-				<name>Uploads Processed</name>
-				<target>Approved</target>
+				<name>Pass Outcome</name>
+				<target>Check Outcome</target>
 				<default>true</default>
 			</transition>
 		</transitions>
@@ -190,14 +219,105 @@ else
 			]]>
 		</metadata>
 	</state>
+	<state>
+		<name>Report Issue</name>
+		<metadata>
+			<![CDATA[
+				{
+					"terminal": true,
+					"xy": [
+						166,
+						304
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<notification>
+				<name>Report Error</name>
+				<description>
+					<![CDATA[]]>
+				</description>
+				<template>
+					<![CDATA[There was an error processing the uploads for ${companyName}]]>
+				</template>
+				<template-language>freemarker</template-language>
+				<notification-type>user-notification</notification-type>
+				<recipients receptionType="to">
+					<user />
+				</recipients>
+				<execution-type>onEntry</execution-type>
+			</notification>
+		</actions>
+	</state>
+	<state>
+		<name>Translate Options</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						448,
+						76
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Translate Workflow Context Options</name>
+				<script>
+					<![CDATA[com.liferay.workflow.dynamic.data.mapping.form.options.translator.action.executor.DDMFormOptionsTranslator]]>
+				</script>
+				<script-language>java</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<transitions>
+			<transition>
+				<name>Audit</name>
+				<target>Inspect Workflow Context</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<name>Send Email</name>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						101,
+						488
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Send Customer Email</name>
+				<script>
+					<![CDATA[com.liferay.workflow.dynamic.data.mapping.form.mailer.action.executor.DDMFormInstanceMailer]]>
+				</script>
+				<script-language>java</script-language>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<transitions>
+			<transition>
+				<name>Email Sent</name>
+				<target>Approved</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
 	<task>
 		<name>Senior AE</name>
 		<metadata>
 			<![CDATA[
 				{
 					"xy": [
-						350,
-						175
+						532,
+						196
 					]
 				}
 			]]>
