@@ -1,0 +1,796 @@
+<?xml version="1.0"?>
+
+<workflow-definition
+	xmlns="urn:liferay.com:liferay-workflow_7.4.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="urn:liferay.com:liferay-workflow_7.4.0 http://www.liferay.com/dtd/liferay-workflow-definition_7_4_0.xsd"
+>
+	<version>52</version>
+	<condition>
+		<id>42bfed28-d059-4fe8-b8ea-f559c92378fc</id>
+		<description>Execute conditional logic.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						384.7574462890625,
+						177.65692138671875
+					]
+				}
+			]]>
+		</metadata>
+		<labels>
+			<label language-id="en_US">
+				Account Found
+			</label>
+		</labels>
+		<script>
+			<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.util.GetterUtil;
+
+final Log logger = LogFactoryUtil.getLog("Merchant Registration - Existing Account [Existing]");
+final long accountEntryId = GetterUtil.getLong(workflowContext.get("accountEntryId"));
+final long accountAdminId = GetterUtil.getLong(workflowContext.get("accountEntryAdministrationUserId"));
+if (accountEntryId > 0) {
+    if (accountAdminId > 0) {
+        logger.info("Transitioning to Yes");
+        returnValue = "611566ae-356d-4305-8738-3e4a4b2f9949";
+    } else {
+        logger.info("Transitioning to No [No Admin User Id]");
+        returnValue = "fc33f612-e5d0-4ad4-bc1b-d715bb623b0d";
+    }
+} else {
+    logger.info("Transitioning to No");
+    returnValue = "fc33f612-e5d0-4ad4-bc1b-d715bb623b0d";
+}]]>
+		</script>
+		<script-language>groovy</script-language>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						No
+					</label>
+				</labels>
+				<id>fc33f612-e5d0-4ad4-bc1b-d715bb623b0d</id>
+				<target>3329db81-505c-4be4-b5e0-2e1e642e58cc</target>
+				<default>true</default>
+			</transition>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Yes
+					</label>
+				</labels>
+				<id>611566ae-356d-4305-8738-3e4a4b2f9949</id>
+				<target>c82439fb-cb9b-442f-ab1b-faf06f300aa1</target>
+				<default>false</default>
+			</transition>
+		</transitions>
+	</condition>
+	<state>
+		<id>d9699cb3-bd08-4847-a7fd-8357b6c2317c</id>
+		<description>Begin a workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						-158.0130889010447,
+						-9.146781590418627
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Extract Object Data</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.dynamic.data.mapping.form.object.extractor.action.executor.DDMFormObjectStorageExtractor]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>3</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+			<action>
+				<name>Update Account Type</name>
+				<description></description>
+				<script>
+					<![CDATA[workflowContext.put("accountType", "business");]]>
+				</script>
+				<script-language>groovy</script-language>
+				<priority>2</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<initial>true</initial>
+		<labels>
+			<label language-id="en_US">
+				Populate Workflow Context
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Continue
+					</label>
+				</labels>
+				<id>bfc70d8b-91cf-4063-9567-9c2a38ce57c2</id>
+				<target>005d826e-9d2d-4197-857b-18d93f0bf576</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<id>005d826e-9d2d-4197-857b-18d93f0bf576</id>
+		<description>Execute actions in the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						246.23712158203125,
+						-8.33782958984375
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Lookup Account</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.account.entry.finder.action.executor.AccountEntryFinder]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+			<action>
+				<name>Update Audit</name>
+				<description></description>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.CompanyLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String account, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53837
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("account", account);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Merchant Registration - Update Audit");
+
+try {
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final Company company = CompanyLocalServiceUtil.getCompany(companyId);
+    final User user = company.getDefaultUser();
+    if (user != null) {
+        logger.info("Adding audit entry");
+        audit(user.getUserId(), emailAddress, companyName, "Merchant registration received", serviceContext);
+    } else {
+        logger.warn("Unable to find default user");
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Lookup Account
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Continue
+					</label>
+				</labels>
+				<id>4a4655cc-50a2-4bca-b2e8-05d18083ec9c</id>
+				<target>b2ce800c-19e2-473d-acd1-d003c2354ec2</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<id>3329db81-505c-4be4-b5e0-2e1e642e58cc</id>
+		<description>Execute actions in the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						808.9726759084479,
+						388.1781346317871
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Create Account</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.account.entry.creator.action.executor.AccountEntryCreator]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Create Account
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Transition Label
+					</label>
+				</labels>
+				<id>88cecd18-56e9-40ec-8904-bc914c3917c4</id>
+				<target>37832159-c920-4067-a515-1e75c54595bf</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<id>24f7fecf-0a6b-4d72-a611-1660b7eb7005</id>
+		<description>Execute actions in the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						467.3927001953125,
+						671.7762451171875
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Create User Account</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.user.account.creator.action.executor.UserAccountCreator]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Create User Account
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Update Account
+					</label>
+				</labels>
+				<id>425c3d19-1b41-4f2b-8c11-a20d27a3cb6b</id>
+				<target>c8ae2584-df3b-492b-8389-91b15ea6019c</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<id>98c5e0af-1fc6-4d07-903b-94bbbafa77d8</id>
+		<description>Conclude the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						88.19204711914062,
+						659.4132690429688
+					],
+					"terminal": true
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Reject Registration</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil.updateStatus(com.liferay.portal.kernel.workflow.WorkflowConstants.getLabelStatus("denied"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<priority>2</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+			<action>
+				<name>Update Audit</name>
+				<description></description>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String account, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53837
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("account", account);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Merchant Registration - Update Audit");
+
+try {
+    final long userId = (long)workflowContext.get("accountEntryAdministrationUserId");
+    final String companyName = workflowContext.get("companyName");
+    final String emailAddress = workflowContext.get("emailAddress");
+    final User user = UserLocalServiceUtil.fetchUser(userId)
+
+    if (user != null) {
+        logger.info("Adding audit entry");
+        audit(user.getUserId(), user.getEmailAddress(), companyName, "Registration rejected for " + emailAddress, serviceContext);
+    } else {
+        logger.warn("Unable to find user for " + userId);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Reject Registration
+			</label>
+		</labels>
+	</state>
+	<state>
+		<id>c8ae2584-df3b-492b-8389-91b15ea6019c</id>
+		<description>Execute actions in the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						333.732666015625,
+						892.5520629882812
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Add User to Account</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.user.group.roles.updater.action.executor.UserGroupRolesUpdater]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Add User to Account
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Continue
+					</label>
+				</labels>
+				<id>8cbade44-8acd-43e5-a11f-ab126fff7d39</id>
+				<target>2ca56564-8203-484e-8ab5-7cc9a95a7d68</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<id>2ca56564-8203-484e-8ab5-7cc9a95a7d68</id>
+		<description>Conclude the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						517.2073907926917,
+						1139.0403731630474
+					],
+					"terminal": true
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Approve Registration</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.portal.kernel.workflow.WorkflowStatusManagerUtil.updateStatus(com.liferay.portal.kernel.workflow.WorkflowConstants.getLabelStatus("approved"), workflowContext);]]>
+				</script>
+				<script-language>groovy</script-language>
+				<priority>2</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+			<action>
+				<name>Update Audit</name>
+				<description></description>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String account, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53837
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("account", account);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Merchant Registration - Update Audit");
+
+try {
+    long accountAdminuserId = -1;
+    if (workflowContext.containsKey("accountEntryAdministrationUserId")) {
+        accountAdminuserId = (long)workflowContext.get("accountEntryAdministrationUserId");
+    }
+    final long userId = (long)workflowContext.get("newUserId");
+    final String emailAddress = workflowContext.get("emailAddress");
+    final String companyName = workflowContext.get("companyName");
+
+    if (accountAdminuserId > 0) {
+        final User user = UserLocalServiceUtil.fetchUser(userId)
+        logger.info("Adding audit entry");
+        audit(user.getUserId(), user.getEmailAddress(), companyName, "Registration approved for " + emailAddress, serviceContext);
+    } else {
+        logger.info("Adding audit entry");
+        audit(userId, emailAddress, companyName, "Merchant account created", serviceContext);
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Approve Registration
+			</label>
+		</labels>
+	</state>
+	<state>
+		<id>b2ce800c-19e2-473d-acd1-d003c2354ec2</id>
+		<description>Execute actions in the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						821.546875,
+						-9
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Inspect Workflow Context</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.context.inspector.action.executor.WorkflowContextInspector]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Inspect Workflow Context
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Continue
+					</label>
+				</labels>
+				<id>33caa042-1ffc-4d0d-acd2-bdcdf9094d75</id>
+				<target>42bfed28-d059-4fe8-b8ea-f559c92378fc</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<id>37832159-c920-4067-a515-1e75c54595bf</id>
+		<description>Execute actions in the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						921.546875,
+						618
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Create User Account</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.user.account.creator.action.executor.UserAccountCreator]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Create User Account
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Transition Label
+					</label>
+				</labels>
+				<id>98b447b8-6fb8-4f37-bff7-60ad3384be68</id>
+				<target>62318e05-ab55-4ad4-b326-ba4e14efb546</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<id>62318e05-ab55-4ad4-b326-ba4e14efb546</id>
+		<description>Execute actions in the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						901.546875,
+						860
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Make User Account Admin</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.user.group.roles.updater.action.executor.UserGroupRolesUpdater]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Make User Account Admin
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Send Contract
+					</label>
+				</labels>
+				<id>7f69d832-65bc-4ce4-91dc-cd9213bd2b72</id>
+				<target>5795dee3-4f4b-4caf-b8a9-4c95b9f9b1c0</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<state>
+		<id>5795dee3-4f4b-4caf-b8a9-4c95b9f9b1c0</id>
+		<description>Execute actions in the workflow.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						946.2598219583821,
+						1020.8880961862365
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Send Contract</name>
+				<description></description>
+				<script>
+					<![CDATA[com.liferay.workflow.docusign.action.executor.DocuSignMailer]]>
+				</script>
+				<script-language>java</script-language>
+				<priority>1</priority>
+				<execution-type>onEntry</execution-type>
+			</action>
+		</actions>
+		<labels>
+			<label language-id="en_US">
+				Send Contract
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Continue
+					</label>
+				</labels>
+				<id>421b72cd-08bd-4535-996b-1af0e25ea10b</id>
+				<target>2ca56564-8203-484e-8ab5-7cc9a95a7d68</target>
+				<default>true</default>
+			</transition>
+		</transitions>
+	</state>
+	<task>
+		<id>c82439fb-cb9b-442f-ab1b-faf06f300aa1</id>
+		<description>Ask a user to work on the item.</description>
+		<metadata>
+			<![CDATA[
+				{
+					"xy": [
+						238.66864917701972,
+						363.97526358151083
+					]
+				}
+			]]>
+		</metadata>
+		<actions>
+			<action>
+				<name>Update Audit</name>
+				<description></description>
+				<script>
+					<![CDATA[import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.Company;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.service.ServiceContext;
+import com.liferay.portal.kernel.service.UserLocalServiceUtil;
+import com.liferay.portal.kernel.service.CompanyLocalServiceUtil;
+import com.liferay.object.service.ObjectEntryLocalServiceUtil;
+
+def audit(final long userId, final String emailAddress, final String account, final String action, ServiceContext serviceContext) {
+    final groupId = 0;
+    final objectDefinitionId = 53837
+    final Map<String, Serializable> values = new HashMap<String, Serializable>() {{
+        put("entryDate", new Date());
+        put("account", account);
+        put("action", action);
+        put("userEmail", emailAddress);
+    }};
+    ObjectEntryLocalServiceUtil.addObjectEntry(userId, groupId, objectDefinitionId, values, serviceContext != null ? serviceContext : new ServiceContext());
+}
+
+final Log logger = LogFactoryUtil.getLog("Merchant Registration - Update Audit");
+
+try {
+    long accountAdminUserId = -1;
+    if (workflowContext.containsKey("accountEntryAdministrationUserId")) {
+        accountAdminUserId = (long)workflowContext.get("accountEntryAdministrationUserId");
+    }
+    final User accountAdminUser = UserLocalServiceUtil.fetchUser(accountAdminUserId)
+    final String companyName = workflowContext.get("companyName");
+    final String emailAddress = workflowContext.get("emailAddress");
+    final long companyId = Long.parseLong(workflowContext.get("companyId"));
+    final Company company = CompanyLocalServiceUtil.getCompany(companyId);
+    final User defaultUser = company.getDefaultUser();
+
+    if (defaultUser != null && accountAdminUser != null) {
+        logger.info("Adding audit entry");
+        audit(defaultUser.getUserId(), accountAdminUser.getEmailAddress(), companyName, "Registration submitted for review for " + emailAddress, serviceContext);
+    } else if (accountAdminUserId < 1) {
+        logger.warn("Unable to find user for " + accountAdminUserId);
+    } else {
+        logger.warn("Unable to find default user");
+    }
+} catch (Exception e) {
+    logger.error(e);
+}]]>
+				</script>
+				<script-language>groovy</script-language>
+				<priority>1</priority>
+				<execution-type>onAssignment</execution-type>
+			</action>
+			<notification>
+				<name>Inform Account Administrator</name>
+				<description>
+					<![CDATA[]]>
+				</description>
+				<template>
+					<![CDATA[We have received a registration request from ${forename} ${surname} [${emailAddress}].
+
+Please review the request and take the appropriate action]]>
+				</template>
+				<template-language>freemarker</template-language>
+				<notification-type>email</notification-type>
+				<notification-type>user-notification</notification-type>
+				<recipients receptionType="to">
+					<assignees />
+				</recipients>
+				<execution-type>onAssignment</execution-type>
+			</notification>
+		</actions>
+		<assignments>
+			<user>
+				<email-address>rene.bernard@chateaurouge.com</email-address>
+			</user>
+		</assignments>
+		<labels>
+			<label language-id="en_US">
+				Approve Registration
+			</label>
+		</labels>
+		<transitions>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Approve
+					</label>
+				</labels>
+				<id>6027ecca-4a3b-4671-a592-103b3a841a25</id>
+				<target>24f7fecf-0a6b-4d72-a611-1660b7eb7005</target>
+				<default>true</default>
+			</transition>
+			<transition>
+				<labels>
+					<label language-id="en_US">
+						Reject
+					</label>
+				</labels>
+				<id>4d88ec47-ee82-42a0-9171-7b5cb973e3bc</id>
+				<target>98c5e0af-1fc6-4d07-903b-94bbbafa77d8</target>
+				<default>false</default>
+			</transition>
+		</transitions>
+	</task>
+</workflow-definition>
